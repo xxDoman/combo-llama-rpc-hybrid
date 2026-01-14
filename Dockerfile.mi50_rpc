@@ -1,0 +1,19 @@
+# Dockerfile.mi50_rpc (AMD Worker)
+FROM rocm/dev-ubuntu-24.04:7.0-complete AS builder
+RUN apt-get update && apt-get install -y build-essential cmake git libssl-dev
+WORKDIR /app
+RUN git clone https://github.com/ggerganov/llama.cpp .
+RUN mkdir build && cd build &&     cmake .. -DGGML_HIP=ON -DAMDGPU_TARGETS=gfx906 -DGGML_RPC=ON &&     cmake --build . --config Release -j$(nproc) --target rpc-server
+
+FROM rocm/dev-ubuntu-24.04:7.0-complete
+WORKDIR /app
+COPY --from=builder /app/build/bin/rpc-server /app/rpc-server
+COPY --from=builder /app/build/bin/*.so* /app/
+COPY ./tensile_kernels /app/tensile_libs
+
+ENV LD_LIBRARY_PATH=/app:/opt/rocm/lib:$LD_LIBRARY_PATH
+ENV HSA_OVERRIDE_GFX_VERSION=9.0.6
+ENV ROCBLAS_TENSILE_LIBPATH=/app/tensile_libs
+
+EXPOSE 50052
+ENTRYPOINT ["/app/rpc-server", "-H", "0.0.0.0", "-p", "50052"]

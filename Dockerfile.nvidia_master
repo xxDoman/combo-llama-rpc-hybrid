@@ -1,0 +1,26 @@
+# Dockerfile.nvidia_master
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04 AS builder
+RUN apt-get update && apt-get install -y build-essential cmake git libcurl4-openssl-dev libssl-dev
+RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/libcuda.so.1
+WORKDIR /app
+RUN git clone https://github.com/ggerganov/llama.cpp .
+
+RUN mkdir build && cd build &&     cmake .. \
+    -DGGML_CUDA=ON \
+    -DGGML_RPC=ON \
+    -DCMAKE_CUDA_ARCHITECTURES=89 \
+    -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . --config Release -j$(nproc) --target llama-server
+
+FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# DODANO libgomp1 poniżej:
+RUN apt-get update && apt-get install -y libcurl4 libssl3 libgomp1
+WORKDIR /app
+
+COPY --from=builder /app/build/bin/llama-server /app/llama-server
+COPY --from=builder /app/build/bin/*.so* /app/
+
+ENV LD_LIBRARY_PATH=/app:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+EXPOSE 8080
+ENTRYPOINT ["/app/llama-server"]

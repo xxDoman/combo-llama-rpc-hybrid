@@ -1,0 +1,7 @@
+# Modele są za duże na GitHub
+guff/*.gguf
+guff/*.bin
+
+# Pliki systemowe i tymczasowe
+.DS_Store
+*.log
