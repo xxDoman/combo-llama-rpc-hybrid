@@ -9,7 +9,7 @@ Measurements taken using **Qwen3-VL-30B-A3B-Instruct (Q5_K_M)** on Hybrid RPC Se
 ### 🧪 Power Limit vs Speed (Efficiency Test)
 | Setting | Power Limit | Generation Speed | Thermal Status |
 | :--- | :--- | :--- | :--- |
-| **Power Overdrive** | **160W** | **55.35 tokens/s** | **Stable & Cool** |
+| **Power Overdrive** | **160W** | **55.83 tokens/s** | **Stable & Cool** |
 | **Stock/Reset** | **225W** | **55.42 tokens/s** | **Stable & Cool** |
 
 > **⚠️ Performance Bottleneck Analysis:** > Our tests show near-identical performance between 160W and 225W. This indicates that the GPU core is not the limiting factor. The system is currently bottlenecked by the **PCIe Gen 4 x4 interface and bridge latency**. This interconnect handles the RPC synchronization between the NVIDIA Master and AMD Worker, capping the throughput at ~55.4 t/s for the 30B model.
