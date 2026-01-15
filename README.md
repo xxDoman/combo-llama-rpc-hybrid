@@ -3,6 +3,15 @@
 
 **Combo-Llama** is a high-performance LLM cluster designed to bridge the gap between NVIDIA and AMD ecosystems. By utilizing the **llama.cpp RPC protocol**, this project aggregates the VRAM of an **NVIDIA RTX 4070 (12GB)** and an **AMD Instinct MI50 (32GB)** into a single, cohesive compute unit with **44GB of total usable VRAM**.
 
+## ⚙️ Point 0: Host & Hardware Prerequisites
+Before deploying the containers, your host system must be configured according to the **ROCm 7.1** specifications. This is the foundation for stable communication between the hardware and Docker.
+
+* **Host Driver Stack:** Ensure the **Linux Kernel KFD drivers** are correctly installed on the host.
+* **ROCm Version:** This setup is optimized and tested for **ROCm 7.1**. Follow the driver/firmware matrix in the [Project Wiki](https://github.com/xxDoman/ollama-amd-rocm71-vl/wiki).
+* **MI50 Firmware:** Specific firmware is required to unlock the full **1725MHz SCLK** potential.
+* **Cooling:** Active cooling modification is **MANDATORY**. Sustained high-speed inference (1725MHz) will overheat a stock MI50 without a custom fan mod.
+* **Docker Access:** Ensure the user is in the `video` and `render` groups to allow Docker access to `/dev/kfd` and `/dev/dri`.
+
 ## 🏗️ System Architecture
 The system operates in a Master-Worker configuration via RPC:
 - **Master (NVIDIA):** Runs the HTTP API, manages the KV Cache, and executes layers optimized for CUDA.
@@ -18,7 +27,7 @@ Measurements taken using **Qwen3-VL-30B-A3B-Instruct (Q5_K_M)** on the Hybrid RP
 | **Power Overdrive**| **160W** | **55.35 tokens/s** | **~43°C (Active Mod)** |
 
 > **⚠️ Performance Bottleneck Analysis:**
-> The marginal difference between 160W and 225W proves the system is bottlenecked by the **PCIe Gen 4 x4 interface and bridge latency**. The GPU core has unused headroom, and temperatures remain exceptionally low due to the custom active cooling mod.
+> The marginal difference between 160W and 225W proves the system is bottlenecked by the **PCIe Gen 4 x4 interface**. The GPU core has unused headroom, and temperatures remain exceptionally low due to the custom active cooling mod.
 
 ## 🖥️ Live Hardware Utilization (Snapshot)
 ![Cluster Performance Dashboard](dashboard.png)
@@ -27,8 +36,6 @@ Measurements taken using **Qwen3-VL-30B-A3B-Instruct (Q5_K_M)** on the Hybrid RP
 - **NVIDIA 4070 (Master):** **~12% GPU Load** | ~6.7GB VRAM | Low Power (~50W).
 
 ## 🧠 VRAM & Context Management
-This setup is strictly optimized for **Single User Performance** to maximize speed and memory capacity.
-
 | Feature | Optimized (Current) | Default (Llama.cpp) | Difference |
 | :--- | :--- | :--- | :--- |
 | **Parallel Users** | **1 User** | 4 Users | -3 Slots |
@@ -40,15 +47,12 @@ This setup is strictly optimized for **Single User Performance** to maximize spe
 ## 👁️ Vision-Language Capabilities (VL)
 Tested with **Qwen-VL**, this cluster supports multimodal tasks:
 - **Image Analysis:** Detailed descriptions of visual input.
-- **OCR:** High-speed text extraction.
+- **OCR:** High-speed text extraction from documents.
 - **Visual Reasoning:** Complex logic involving images.
 
 ## 📂 Model Management (.GGUF)
 1. **Placement:** Put your `.gguf` files into the `./guff/` folder.
-2. **Configuration:** Open `docker-compose.yml` and update the filename after the `-m /models/` flag:
-   ```yaml
-   command: "/app/llama-server -m /models/YOUR_MODEL_NAME.gguf --host 0.0.0.0 ..."
-   ```
+2. **Configuration:** Open `docker-compose.yml` and update the filename after the `-m /models/` flag.
 
 ## 🛠️ Hardware Compatibility Matrix
 
@@ -62,7 +66,8 @@ Pre-compiled for **sm_89** (RTX 40-series). To change architectures, edit `Docke
 | **RTX 20-series** | `75` | Manual Rebuild |
 
 ### AMD (Worker Node)
-- **Target:** `gfx906` (Instinct MI50, MI60, Radeon VII).
+- **Target Arch:** `gfx906` (Instinct MI50, MI60, Radeon VII).
+- **Software Stack:** **ROCm 7.1** (Latest Tested).
 - **Cooling:** Active cooling mod is **mandatory** for sustained performance. [Check Wiki for Hardware Mods](https://github.com/xxDoman/ollama-amd-rocm71-vl/wiki).
 
 ## 🚀 Quick Start Guide
@@ -78,7 +83,7 @@ Pre-compiled for **sm_89** (RTX 40-series). To change architectures, edit `Docke
 
 ## ❓ Troubleshooting (FAQ)
 - **"Failed to load model":** Verify the filename in `docker-compose.yml` matches the file in `./guff/` exactly.
-- **"Disk space errors":** Large models require ~30GB+ of free space. Use `mv` instead of `cp`, and run `docker system prune -a` to clear old images.
+- **"Disk space errors":** Large models require ~30GB+ of free space. Use `mv` instead of `cp`.
 - **"Permission denied":** If the model won't load, run `chmod 644 ./guff/*.gguf`.
 
 ---
