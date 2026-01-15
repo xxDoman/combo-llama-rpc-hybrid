@@ -1,31 +1,85 @@
 # 🚀 Combo-Llama: Hybrid NVIDIA + AMD (MI50) VRAM Cluster
 ### Performance-Optimized Distributed Inference (RTX 40-Series & GFX906)
 
-**Combo-Llama** to profesjonalny klaster LLM, który agreguje **44GB VRAM** z kart **NVIDIA RTX 4070 (12GB)** oraz **AMD Instinct MI50 (32GB)**.
+**Combo-Llama** is a high-performance LLM cluster designed to bridge the gap between NVIDIA and AMD ecosystems. By utilizing the **llama.cpp RPC protocol**, this project aggregates the VRAM of an **NVIDIA RTX 4070 (12GB)** and an **AMD Instinct MI50 (32GB)** into a single, cohesive compute unit with **44GB of total usable VRAM**.
 
-## 📊 Dowód Wydajności (55.83 tokens/s)
-![Cluster Performance Dashboard](dashboard.png)
-*Powyższy zrzut ekranu przedstawia system podczas generowania 2048 tokenów.*
+## 🏗️ System Architecture
+The system operates in a Master-Worker configuration via RPC:
+- **Master (NVIDIA):** Runs the HTTP API, manages the KV Cache, and executes layers optimized for CUDA.
+- **Worker (AMD):** Offloads heavy matrix multiplications via RPC, utilizing the 32GB HBM2 memory of the Instinct MI50.
 
-### 📈 Analiza Obciążenia (Snapshot z testu):
-| Podzespół | Wykorzystanie GPU | VRAM | Rola w systemie |
+## 📊 Performance Benchmarks (Certified Results)
+Measurements taken using **Qwen3-VL-30B-A3B-Instruct (Q5_K_M)** on the Hybrid RPC Setup.
+
+### 🧪 Power Limit vs Speed (The PCIe Bottleneck)
+| Setting | Power Limit | Generation Speed | Thermal Status |
 | :--- | :--- | :--- | :--- |
-| **AMD MI50** | **89%** | **~18 GB** | Główna moc obliczeniowa (Compute) |
-| **NVIDIA 4070** | **12%** | **~6.7 GB** | Master Node / KV Cache / API |
+| **Reset/Stock** | **225W** | **55.83 tokens/s** | **~51°C (Active Mod)** |
+| **Power Overdrive**| **160W** | **55.35 tokens/s** | **~43°C (Active Mod)** |
 
-> **Werdykt Techniczny:** Niskie obciążenie karty NVIDIA (12%) przy jednoczesnym wysokim obciążeniu AMD (89%) ostatecznie potwierdza **bottleneck na szynie PCIe Gen 4 x4**. System generuje tokeny tak szybko, jak pozwala na to interfejs komunikacyjny, a nie same rdzenie GPU.
+> **⚠️ Performance Bottleneck Analysis:**
+> The marginal difference between 160W and 225W proves the system is bottlenecked by the **PCIe Gen 4 x4 interface and bridge latency**. The GPU core has unused headroom, and temperatures remain exceptionally low due to the custom active cooling mod.
 
-## 🧠 Optymalizacja VRAM i Kontekstu
-Dzięki flagom `--parallel 1` oraz `--ctx-size 32768`, klaster oszczędza **15GB VRAM**, pozwalając na pracę z modelami **30B (Q5)** przy zachowaniu "pamięci" o długości ok. 60 stron tekstu.
+## 🖥️ Live Hardware Utilization (Snapshot)
+![Cluster Performance Dashboard](dashboard.png)
+*Typical load during 2048 token generation:*
+- **AMD MI50 (Worker):** **~89% GPU Load** | ~18GB VRAM | SCLK 1725MHz.
+- **NVIDIA 4070 (Master):** **~12% GPU Load** | ~6.7GB VRAM | Low Power (~50W).
 
-## 🛠️ Hardware & Cooling
-- **RTX 4070:** Pracuje w trybie niskiego poboru mocy (~50W).
-- **MI50:** Dzięki autorskiemu chłodzeniu aktywnemu, karta utrzymuje **~51°C** przy pełnym obciążeniu (1725MHz SCLK). [Wiki Chłodzenia](https://github.com/xxDoman/ollama-amd-rocm71-vl/wiki).
+## 🧠 VRAM & Context Management
+This setup is strictly optimized for **Single User Performance** to maximize speed and memory capacity.
 
-## 🚀 Szybki Start
-1. Wrzuć model do `./guff/`.
-2. Uruchom: `docker compose up -d`.
-3. Testuj: `./bench_long.sh`.
+| Feature | Optimized (Current) | Default (Llama.cpp) | Difference |
+| :--- | :--- | :--- | :--- |
+| **Parallel Users** | **1 User** | 4 Users | -3 Slots |
+| **VRAM Usage** | **~25 GB** | **~40+ GB** | **~15 GB Saved** |
+| **Context Window** | **32,768 tokens** | - | **~60 Pages of Memory** |
+
+**Key Advantage:** Setting `--parallel 1` saves **15GB of VRAM**, allowing a **30B model** with a massive **32k context window** to fit entirely within the 44GB hybrid buffer.
+
+## 👁️ Vision-Language Capabilities (VL)
+Tested with **Qwen-VL**, this cluster supports multimodal tasks:
+- **Image Analysis:** Detailed descriptions of visual input.
+- **OCR:** High-speed text extraction.
+- **Visual Reasoning:** Complex logic involving images.
+
+## 📂 Model Management (.GGUF)
+1. **Placement:** Put your `.gguf` files into the `./guff/` folder.
+2. **Configuration:** Open `docker-compose.yml` and update the filename after the `-m /models/` flag:
+   ```yaml
+   command: "/app/llama-server -m /models/YOUR_MODEL_NAME.gguf --host 0.0.0.0 ..."
+   ```
+
+## 🛠️ Hardware Compatibility Matrix
+
+### NVIDIA (Master Node)
+Pre-compiled for **sm_89** (RTX 40-series). To change architectures, edit `Dockerfile.nvidia_master` line `-DCMAKE_CUDA_ARCHITECTURES=89`.
+| Generation | Architecture Code | Status |
+| :--- | :--- | :--- |
+| **RTX 50-series** | `100` | Manual Rebuild |
+| **RTX 40-series** | `89` | **Ready (Default)** |
+| **RTX 30-series** | `86` | Manual Rebuild |
+| **RTX 20-series** | `75` | Manual Rebuild |
+
+### AMD (Worker Node)
+- **Target:** `gfx906` (Instinct MI50, MI60, Radeon VII).
+- **Cooling:** Active cooling mod is **mandatory** for sustained performance. [Check Wiki for Hardware Mods](https://github.com/xxDoman/ollama-amd-rocm71-vl/wiki).
+
+## 🚀 Quick Start Guide
+1. **Clone & Setup:**
+   ```bash
+   git clone https://github.com/xxDoman/combo-llama-rpc-hybrid.git
+   cd combo-llama-rpc-hybrid
+   mkdir guff
+   mv /path/to/model.gguf ./guff/
+   ```
+2. **Deploy:** `docker compose up -d`
+3. **Benchmark:** `./bench_long.sh`
+
+## ❓ Troubleshooting (FAQ)
+- **"Failed to load model":** Verify the filename in `docker-compose.yml` matches the file in `./guff/` exactly.
+- **"Disk space errors":** Large models require ~30GB+ of free space. Use `mv` instead of `cp`, and run `docker system prune -a` to clear old images.
+- **"Permission denied":** If the model won't load, run `chmod 644 ./guff/*.gguf`.
 
 ---
-Developed by **xxdoman** | AI Master of Disaster | 2026-01-15
+Developed by **xxdoman** | AI Master of Disaster | Optimized Hybrid Performance
