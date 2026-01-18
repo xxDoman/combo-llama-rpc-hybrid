@@ -1,12 +1,11 @@
-version: '3.8'
-
 services:
   rpc-server:
     container_name: rpc-laptop
     image: xxdoman/llama-rpc-nvidia:laptop
-    runtime: nvidia
+    # Usunięto 'runtime: nvidia', ponieważ blok 'deploy' poniżej jest nowszym standardem
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     ports:
       - "50052:50052"
     deploy:

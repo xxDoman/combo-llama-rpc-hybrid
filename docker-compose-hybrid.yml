@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   mi50-rpc:
     container_name: combo-mi50-rpc
@@ -22,10 +20,12 @@ services:
     ports:
       - "8099:8080"
     command: >
-      --model /models/Qwen2.5-Coder-32B-Instruct-Q5_K_M.gguf
-      --rpc mi50-rpc:50052,192.168.0.220:50052
+      --model /models/Qwen3-VL-30B-A3B-Instruct-Q5_K_M.gguf
+      --rpc mi50-rpc:50052,192.168.0.231:50052
       --n-gpu-layers 100
-      --ctx-size 32768
+      --ctx-size 65536
+      --cache-type-k q4_0
+      --cache-type-v q4_0
       --host 0.0.0.0
       --port 8080
     depends_on:
@@ -40,3 +40,4 @@ services:
     environment:
       - 'OPENAI_API_BASE_URL=http://nvidia-master:8080/v1'
     restart: unless-stopped
+

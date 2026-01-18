@@ -18,15 +18,33 @@ services:
     volumes:
       - ./guff:/models
     ports:
-      - "8081:8080"
+      # ZMIANA TUTAJ: Wystawiamy UI serwera Llama na porcie 8099 /ctx  32768
+      - "8099:8080"
     command: >
-      --model /models/Qwen3-VL-30B-A3B-Instruct-Q5_K_M.gguf 
-      --rpc mi50-rpc:50052 
-      --parallel 1 
-      --ctx-size 32768 
-      --n-gpu-layers 100 
-      --host 0.0.0.0 
+      --model /models/Qwen2-VL-72B-Instruct-Q3_K_M.gguf
+      --rpc mi50-rpc:50052
+      --parallel 1
+      --ctx-size 8184
+      --n-gpu-layers 100
+      --host 0.0.0.0
       --port 8080
     depends_on:
       - mi50-rpc
     restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      # To zostaje po staremu (standardowo jak w Twoim oryginale)
+      - "8090:8080"
+    volumes:
+      - open-webui-data:/app/backend/data
+    environment:
+      # Open WebUI łączy się z nvidia-master wewnątrz sieci Dockera (port 8080)
+      - 'OPENAI_API_BASE_URL=http://nvidia-master:8080/v1'
+      - 'OPENAI_API_KEY=sk-1234567890'
+    restart: unless-stopped
+
+volumes:
+  open-webui-data:
