@@ -1,0 +1,72 @@
+networks:
+  llama-net:
+    driver: bridge
+
+services:
+  # 1. SERWER AMD MI50 (Działający)
+  mi50-rpc:
+    container_name: combo-mi50-rpc
+    image: xxdoman/llama-rpc-mi50:latest
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    networks:
+      - llama-net
+    expose:
+      - "50052"
+    # Port zewnętrzny opcjonalny, Master łączy się wewnątrz sieci llama-net
+    ports:
+      - "50052:50052"
+    restart: unless-stopped
+
+  # 2. SERWER INTEL CPU (Twój nowy, skompilowany obraz)
+  intel-rpc:
+    container_name: intel-cpu-worker
+    image: xxdoman/llama-rpc-intel:latest
+    networks:
+      - llama-net
+    expose:
+      - "50052"
+    command: ["-p", "50052"]
+    restart: unless-stopped
+
+  # 3. MASTER NVIDIA (RTX 4070)
+  nvidia-master:
+    container_name: combo-nvidia-master
+    image: xxdoman/llama-rpc-nvidia:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./guff:/models
+    ports:
+      - "8099:8080"
+    # ŁĄCZENIE PO NAZWACH: mi50-rpc i intel-rpc
+    # n-gpu-layers 48 (wszystkie warstwy modelu Qwen3-VL-30B)
+    command: >
+      --model /models/Qwen3-VL-30B-A3B-Instruct-Q5_K_M.gguf
+      --rpc mi50-rpc:50052,intel-rpc:50052
+      --n-gpu-layers 48
+      --ctx-size 65536
+      --cache-type-k q4_0
+      --cache-type-v q4_0
+      --host 0.0.0.0
+      --port 8080
+    depends_on:
+      - mi50-rpc
+      - intel-rpc
+    networks:
+      - llama-net
+    restart: unless-stopped
+
+  # 4. FRONTEND
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "8090:8080"
+    environment:
+      - 'OPENAI_API_BASE_URL=http://nvidia-master:8080/v1'
+    networks:
+      - llama-net
+    restart: unless-stopped

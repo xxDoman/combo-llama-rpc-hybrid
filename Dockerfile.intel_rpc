@@ -1,0 +1,38 @@
+# Etap 1: Builder (na bazie Ubuntu, bez CUDA)
+FROM ubuntu:22.04 AS builder
+
+# Instalacja narzędzi (dodano libopenblas-dev dla lepszej wydajności CPU)
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git libcurl4-openssl-dev libssl-dev libopenblas-dev
+
+WORKDIR /app
+# Klonujemy to samo repo co w Masterze
+RUN git clone https://github.com/ggerganov/llama.cpp .
+
+# Kompilacja pod CPU:
+# 1. GGML_NATIVE=ON -> włącza AVX2/AVX512 Twojego Intela
+# 2. GGML_OPENBLAS=ON -> przyspiesza operacje macierzowe na procesorze
+# 3. GGML_RPC=ON -> aktywuje serwer dla klastra
+RUN mkdir build && cd build && \
+    cmake .. \
+    -DGGML_NATIVE=ON \
+    -DGGML_OPENBLAS=ON \
+    -DGGML_RPC=ON \
+    -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . --config Release -j$(nproc)
+
+# Etap 2: Runtime
+FROM ubuntu:22.04
+# Instalacja bibliotek uruchomieniowych (libopenblas0 dla CPU, libgomp1 dla OpenMP)
+RUN apt-get update && apt-get install -y libcurl4 libssl3 libgomp1 libopenblas0
+WORKDIR /app
+
+# Kopiujemy binarkę serwera RPC (używamy wildcarda, by uniknąć błędów nazewnictwa)
+COPY --from=builder /app/build/bin/*rpc-server* /app/rpc-server
+COPY --from=builder /app/build/bin/*.so* /app/
+
+ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
+
+# RPC domyślnie działa na 50052
+EXPOSE 50052
+ENTRYPOINT ["/app/rpc-server", "-p", "50052"]
