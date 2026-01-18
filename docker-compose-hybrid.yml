@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  mi50-rpc:
+    container_name: combo-mi50-rpc
+    image: xxdoman/llama-rpc-mi50:latest
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    ports:
+      - "50052:50052"
+    restart: unless-stopped
+
+  nvidia-master:
+    container_name: combo-nvidia-master
+    image: xxdoman/llama-rpc-nvidia:latest
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./guff:/models
+    ports:
+      - "8099:8080"
+    command: >
+      --model /models/Qwen2.5-Coder-32B-Instruct-Q5_K_M.gguf
+      --rpc mi50-rpc:50052,192.168.0.220:50052
+      --n-gpu-layers 100
+      --ctx-size 32768
+      --host 0.0.0.0
+      --port 8080
+    depends_on:
+      - mi50-rpc
+    restart: unless-stopped
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "8090:8080"
+    environment:
+      - 'OPENAI_API_BASE_URL=http://nvidia-master:8080/v1'
+    restart: unless-stopped

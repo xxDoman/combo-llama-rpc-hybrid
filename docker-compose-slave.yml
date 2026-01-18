@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  rpc-server:
+    container_name: rpc-laptop
+    image: xxdoman/llama-rpc-nvidia:laptop
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "50052:50052"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
